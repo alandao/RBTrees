@@ -1,7 +1,9 @@
 data Color = Red | Black deriving (Eq, Show)
 data RBTreeMap k v = Empty | Node k v Color (RBTreeMap k v) (RBTreeMap k v)
                  deriving (Eq, Show)
---an Empty node is a leaf and is black
+-- an Empty node is a leaf and is black
+data NodeAncestors = RBTreeMap RBTreeMap RBTreeMap 
+--                    Parent   GrandDad    Uncle
 
 {-
 A red black tree must have these conditions:
@@ -13,7 +15,7 @@ A red black tree must have these conditions:
    the same number of black nodes.
 -}
 tree1 = Empty
-tree2 = Node "blah" 10 Black Empty Empty
+tree2 = Node 5 "person" Black Empty Empty
 
 main :: IO()
 main = putStrLn "Undefined"
@@ -36,6 +38,12 @@ key (Node k _ _ _ _) = k
 value :: (Ord k) => RBTreeMap k v -> v
 value (Node _ v _ _ _) = v
 
-bstInsert :: (Ord k) => RBTree k v -> k -> v -> RBTree k v
+bstInsert :: (Ord k) => RBTreeMap k v -> k -> v ->
+          NodeAncestors -> (RBTreeMap k v, NodeAncestors)
+bstInsert Empty key value = Node key value Red Empty Empty
 bstInsert (Node k v c l r) key value
-  | key < k = bstInsert l 
+  | key < k = Node k v c (bstInsert l key value) r
+  | key > k = Node k v c l (bstInsert r key value)
+  | key == k = Node k value Red l r
+
+fix :: RBTreeMap k v -> RBTreeMap k v
