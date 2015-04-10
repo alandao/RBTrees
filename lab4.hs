@@ -41,9 +41,9 @@ value (Node _ v _ _ _) = v
 bstInsert :: (Ord k) => RBTreeMap k v -> k -> v ->
           NodeAncestors -> (RBTreeMap k v, NodeAncestors)
 bstInsert Empty key value = Node key value Red Empty Empty
-bstInsert (Node k v c l r) key value
-  | key < k = Node k v c (bstInsert l key value) r
-  | key > k = Node k v c l (bstInsert r key value)
-  | key == k = Node k value Red l r
+bstInsert t@(Node k v c l r) key value anc
+  | key < k = (Node k v c (bstInsert l key value) r, t Empty r)
+  | key > k = (Node k v c l (bstInsert r key value), t Empty l)
+  | key == k = (Node k value Red l r, anc)
 
 fix :: RBTreeMap k v -> RBTreeMap k v
