@@ -1,9 +1,15 @@
+module RBTrees where
+
+import Prelude hiding (Left, Right)
 data Color = Red | Black deriving (Eq, Show)
-data RBTreeMap k v = Empty | Node k v Color (RBTreeMap k v) (RBTreeMap k v)
+data RBTree a = Empty | Node a Color (RBTree a) (RBTree a)
                  deriving (Eq, Show)
+data Map k v
+data Loc a = Loc (RBTree a) (Context a)
+data Context a = Top
+               | Left a (RBTree a) (Context a)
+               | Right a (RBTree a) (Context a)
 -- an Empty node is a leaf and is black
-data NodeAncestors = RBTreeMap RBTreeMap RBTreeMap 
---                    Parent   GrandDad    Uncle
 
 {-
 A red black tree must have these conditions:
@@ -21,29 +27,15 @@ main :: IO()
 main = putStrLn "Undefined"
 
 --functions required to write
-size :: RBTreeMap k v -> Int
+size :: RBTree a -> Int
 size Empty = 0
-size (Node _ _ _ l r) = (size l) + 1 + (size r)
+size (Node _ _ l r) = (size l) + 1 + (size r)
+
+--zipper traversal
+downLeft :: Loc a -> Loc a
+downLeft Loc (Node k v c l r) context = Loc l (Left k v c r context)
+
+up :: Loc a -> Loc a
+up Loc t (Left k v c r context) = Loc (Node k v c)
 
 --helper functions
-leftChild :: (Ord k) => RBTreeMap k v -> RBTreeMap k v
-leftChild (Node _ _ _ l _) = l
-
-rightChild :: (Ord k) => RBTreeMap k v -> RBTreeMap k v
-rightChild (Node _ _ _ _ r) = r
-
-key :: (Ord k) => RBTreeMap k v -> k
-key (Node k _ _ _ _) = k
-
-value :: (Ord k) => RBTreeMap k v -> v
-value (Node _ v _ _ _) = v
-
-bstInsert :: (Ord k) => RBTreeMap k v -> k -> v ->
-          NodeAncestors -> (RBTreeMap k v, NodeAncestors)
-bstInsert Empty key value = Node key value Red Empty Empty
-bstInsert t@(Node k v c l r) key value anc
-  | key < k = (Node k v c (bstInsert l key value) r, t Empty r)
-  | key > k = (Node k v c l (bstInsert r key value), t Empty l)
-  | key == k = (Node k value Red l r, anc)
-
-fix :: RBTreeMap k v -> RBTreeMap k v
