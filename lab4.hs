@@ -1,14 +1,16 @@
-module RBTrees where
+module RBTree where
 
 import Prelude hiding (Left, Right)
-data Color = Red | Black deriving (Eq, Show)
-data RBTree a = Empty | Node a Color (RBTree a) (RBTree a)
-                 deriving (Eq, Show)
-data Map k v
-data Loc a = Loc (RBTree a) (Context a)
+
 data Context a = Top
-               | Left a (RBTree a) (Context a)
-               | Right a (RBTree a) (Context a)
+               | Left a (Tree a) (Context a)
+               | Right a (Tree a) (Context a)
+data Color = Red | Black deriving (Eq, Show)
+data Tree a = Empty | Node a (Tree a) (Tree a)
+                 deriving (Eq, Show)
+data Loc a = Loc (Tree a) (Context a)
+data Map k v
+data RBNode a = RBNode a Color
 -- an Empty node is a leaf and is black
 
 {-
@@ -20,22 +22,23 @@ A red black tree must have these conditions:
 5. Every path from the root to an Empty node contains
    the same number of black nodes.
 -}
-tree1 = Empty
-tree2 = Node 5 "person" Black Empty Empty
 
 main :: IO()
 main = putStrLn "Undefined"
 
 --functions required to write
-size :: RBTree a -> Int
+size :: Tree a -> Int
 size Empty = 0
-size (Node _ _ l r) = (size l) + 1 + (size r)
+size (Node _ l r) = (size l) + 1 + (size r)
 
 --zipper traversal
-downLeft :: Loc a -> Loc a
-downLeft Loc (Node k v c l r) context = Loc l (Left k v c r context)
+-- v - value, c - color, l - left child, r - right child
+downLeft :: Loc a -> Maybe (Loc a)
+downLeft (Loc (Node v l r) context) = Just $ Loc l (Left v r context)
 
-up :: Loc a -> Loc a
-up Loc t (Left k v c r context) = Loc (Node k v c)
+downRight :: Loc a -> Maybe (Loc a)
+downRight (Loc (Node v l r) context) = Just $ Loc r (Right v l context)
+
+
 
 --helper functions
