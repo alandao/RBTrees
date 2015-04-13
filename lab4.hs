@@ -31,7 +31,7 @@ A red black tree must have these conditions:
 -}
 
 tree1 :: RBTreeMap String Integer
-tree1 = Node (RB (Map "alan" 17) Black) Empty Empty
+tree1 = Node (RB (Map "george" 17) Black) Empty Empty
 
 main :: IO()
 main = putStrLn "Undefined"
@@ -39,15 +39,30 @@ main = putStrLn "Undefined"
 --functions required to write
 size :: Tree a -> Int
 size Empty = 0
-size (Node _ l r) = (size l) + 1 + (size r)
+size (Node _ l r) = size l + 1 + size r
 
 --Red Black Tree operations
-insert :: (Ord a) => Map a b -> RBTreeMap a b -> RBTreeMap a b
-insert item tree = undefined
+insert :: (Ord a, Eq b) => Map a b -> RBTreeMap a b -> RBTreeMap a b
+insert item tree = unzippify $ insertZipped item (Just (zippify tree))
 
-insertZipped :: (Ord a, Eq b) => Map a b -> Loc (RBNode (Map a b))-> Loc (RBNode (Map a b))
-insertZipped kv (Loc Empty context) = (Loc (Node (RB kv Red) Empty Empty) context)
-insertZipped (Map key value) (Loc tree context) = undefined
+insertZipped :: (Ord a, Eq b) => Map a b -> Maybe (Loc (RBNode (Map a b)))-> Loc (RBNode (Map a b))
+insertZipped _ Nothing = error "this wasn't meant to happen, fix me!"
+insertZipped kv (Just (Loc Empty context)) = Loc (Node (RB kv Red) Empty Empty) context
+insertZipped kv@(Map key value) zipTree@(Just (Loc (Node (RB (Map curKey _) _) l r)context))
+  | key < curKey = insertZipped kv (zipTree >>= downLeft)
+  | key > curKey = insertZipped kv (zipTree >>= downRight)
+  | key == curKey = (Loc (Node (RB (Map key value) Red) l r) context)
+
+fixRBTree :: Loc (RBNode a) -> Loc (RBNode a)
+--case 1: N is the root node
+fixRBTree (Loc (Node (RB v Red) l r) Top) = Loc (Node (RB v Black) l r) Top
+--case 2: P is black, we good
+fixRBTree focus@(Loc _ context)
+  | isNothing parent = error "fixRBTree has no parent! first pattern match failed"
+  | getColorOfFocus (fromJust parent) == Black = focus
+  | getColorOfFocus (fromJust parent) == Red && False = undefined
+    where parent = Just focus >>= up
+          getColorOfFocus = rbGetColor . fromJust . getValue . locGetCurTree
 
 find :: a -> RBTreeMap a b -> b
 find = undefined
@@ -66,15 +81,26 @@ up (Loc lTree (Left v rTree c)) = Just $ Loc (Node v lTree rTree) c
 up (Loc rTree (Right v lTree c)) = Just $ Loc (Node v lTree rTree) c
 up (Loc _ Top) = Nothing
 
+top :: Loc a -> Loc a
+top loc@(Loc _ Top) = loc
+top (Loc lTree (Left v rTree c)) = top (Loc (Node v lTree rTree) c)
+top (Loc rTree (Right v lTree c)) = top (Loc (Node v lTree rTree) c)
+
 modify :: (Tree a -> Tree a) -> Loc a -> Loc a
 modify f (Loc tree context) = Loc (f tree) context
 
 --helper functions
+rbGetColor :: RBNode a -> Color
+rbGetColor (RB _ c) = c
+
 rbGetValue :: RBNode a -> a
 rbGetValue (RB value _) = value
 
 zippify :: Tree a -> Loc a
 zippify t = Loc t Top
+
+unzippify :: Loc a -> Tree a
+unzippify loc = locGetCurTree $ top loc
 
 getValue :: Tree a -> Maybe a
 getValue (Node v _ _) = Just v
@@ -85,3 +111,6 @@ mapGetValue (Map _ v) = v
 
 mapGetKey :: Map a b -> a
 mapGetKey (Map k _) = k
+
+locGetCurTree :: Loc a -> Tree a
+locGetCurTree (Loc tree _) = tree
