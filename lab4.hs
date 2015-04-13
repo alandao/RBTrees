@@ -31,7 +31,7 @@ A red black tree must have these conditions:
 -}
 
 tree1 :: RBTreeMap String Integer
-tree1 = Node (RB (Map "george" 17) Black) Empty Empty
+tree1 = Node (RB (Map "george" 17) Black) (Node (RB (Map "alan" 10) Red) Empty Empty) (Node (RB (Map "zeus" 10) Red) Empty Empty)
 
 main :: IO()
 main = putStrLn "Undefined"
@@ -57,11 +57,16 @@ fixRBTree :: Loc (RBNode a) -> Loc (RBNode a)
 --case 1: N is the root node
 fixRBTree (Loc (Node (RB v Red) l r) Top) = Loc (Node (RB v Black) l r) Top
 --case 2: P is black, we good
-fixRBTree focus@(Loc _ context)
+fixRBTree focus@(Loc _ _)
   | isNothing parent = error "fixRBTree has no parent! first pattern match failed"
   | getColorOfFocus (fromJust parent) == Black = focus
-  | getColorOfFocus (fromJust parent) == Red && False = undefined
+  | getColorOfFocus (fromJust parent) == Red &&
+    getColorOfFocus (fromJust (getSibling parent)) == Red =  (paintCurTreeBlack $ fromJust parent)
     where parent = Just focus >>= up
+          getSibling x = if locIsLeftNodeOfParent (fromJust x) --sibling of parent is uncle(or aunt)
+                  then x >>= up >>= downRight
+                  else x >>= up >>= downLeft
+          paintCurTreeBlack = modifyLoc $ modifyRoot rbPaintItBlack
           getColorOfFocus = rbGetColor . fromJust . getValue . locGetCurTree
 
 find :: a -> RBTreeMap a b -> b
@@ -86,25 +91,42 @@ top loc@(Loc _ Top) = loc
 top (Loc lTree (Left v rTree c)) = top (Loc (Node v lTree rTree) c)
 top (Loc rTree (Right v lTree c)) = top (Loc (Node v lTree rTree) c)
 
-modify :: (Tree a -> Tree a) -> Loc a -> Loc a
-modify f (Loc tree context) = Loc (f tree) context
-
 --helper functions
+
+modifyRoot :: (a -> a) -> Tree a -> Tree a
+modifyRoot f (Node v l r) = Node (f v) l r
+
+zippify :: Tree a -> Loc a
+zippify t = Loc t Top
+
+getValue :: Tree a -> Maybe a
+getValue (Node v _ _) = Just v
+getValue Empty = Nothing
+
+unzippify :: Loc a -> Tree a
+unzippify loc = locGetCurTree $ top loc
+
+locGetCurTree :: Loc a -> Tree a
+locGetCurTree (Loc tree _) = tree
+
+modifyLoc :: (Tree a -> Tree a) -> Loc a -> Loc a
+modifyLoc f (Loc tree context) = Loc (f tree) context
+
+locIsLeftNodeOfParent :: Loc a -> Bool
+locIsLeftNodeOfParent (Loc _ (Left{})) = True
+locIsLeftNodeOfParent _ = False
+
 rbGetColor :: RBNode a -> Color
 rbGetColor (RB _ c) = c
 
 rbGetValue :: RBNode a -> a
 rbGetValue (RB value _) = value
 
-zippify :: Tree a -> Loc a
-zippify t = Loc t Top
+rbPaintItBlack :: RBNode a -> RBNode a
+rbPaintItBlack (RB v _) = RB v Black
 
-unzippify :: Loc a -> Tree a
-unzippify loc = locGetCurTree $ top loc
-
-getValue :: Tree a -> Maybe a
-getValue (Node v _ _) = Just v
-getValue Empty = Nothing
+rbPaintItRed :: RBNode a -> RBNode a
+rbPaintItRed (RB v _) = RB v Red
 
 mapGetValue :: Map a b -> b
 mapGetValue (Map _ v) = v
@@ -112,5 +134,3 @@ mapGetValue (Map _ v) = v
 mapGetKey :: Map a b -> a
 mapGetKey (Map k _) = k
 
-locGetCurTree :: Loc a -> Tree a
-locGetCurTree (Loc tree _) = tree
