@@ -20,8 +20,8 @@ type RBTreeMap k v = Tree (RBNode (Map k v))
 
 -- an Empty node is a black leaf
 
-tree1 :: RBTreeMap String Integer
-tree1 = Node (RB (Map "george" 17) Black) (Node (RB (Map "alan" 10) Red) Empty Empty)  (Node (RB (Map "zach" 10) Black) Empty Empty)
+test_1 = insert (Map 49 "a") $ insert (Map 50 "a") Empty
+test_2 = insert (Map 51 "a") $ insert (Map 50 "a") Empty
 
 main :: IO()
 main = putStrLn "Undefined"
@@ -36,17 +36,48 @@ insert :: (Ord a, Eq b) => Map a b -> RBTreeMap a b -> RBTreeMap a b
 insert item tree = unzippify $ fixRBTree $ insertZipped item (Just (zippify tree))
 
 insertZipped :: (Ord a, Eq b) => Map a b -> Maybe (Loc (RBNode (Map a b)))-> Loc (RBNode (Map a b))
-insertZipped _ Nothing = error "this wasn't meant to happen, fix me!"
+insertZipped _ Nothing = error "insertZipped's insert operation is flawed."
 insertZipped kv (Just (Loc Empty context)) = Loc (Node (RB kv Red) Empty Empty) context
 insertZipped kv@(Map key value) zipTree@(Just (Loc (Node (RB (Map curKey _) _) l r)context))
   | key < curKey = insertZipped kv (zipTree >>= downLeft)
   | key > curKey = insertZipped kv (zipTree >>= downRight)
   | key == curKey = Loc (Node (RB (Map key value) Red) l r) context
 
-fixRBTree :: (Eq a) => Loc (RBNode a) -> Loc (RBNode a)
 --case 1: N is the root node
+fixRBTree :: (Eq a) => Loc (RBNode a) -> Loc (RBNode a)
 fixRBTree (Loc (Node (RB v Red) l r) Top) = Loc (Node (RB v Black) l r) Top
+fixRBTree focus = fixRBTree_2 focus
+
 --case 2: P is black, we good
+fixRBTree_2 :: (Eq a) => Loc (RBNode a) -> Loc (RBNode a)
+fixRBTree_2 focus
+  | parentColor focus == Just Black = focus
+  | otherwise = fixRBTree_3 focus
+
+--case 3: P and U are both red.
+fixRBTree_3 :: (Eq a) => Loc (RBNode a) -> Loc (RBNode a)
+fixRBTree_3 focus
+  | parentColor focus == Just Red && uncleColor focus == Just Red = fixRBTree $
+                                                          setRed $
+                                                          assertGrandparent $
+                                                          setBlack $
+                                                          assertSibling $
+                                                          Just $
+                                                          setBlack $
+                                                          assertParent focus
+  | otherwise = balance focus
+  where setBlack focus = (\x -> setColorOfFocus x Black) focus
+        setRed focus = (\x -> setColorOfFocus x Red) focus
+        assertParent focus = case parent focus of
+                             Just x-> x
+                             Nothing -> error "fixRBTree_3's focus has no parent."
+        assertSibling focus = case focus >>= sibling of
+                             Just x -> x
+                             Nothing -> error "fixRBTree_3's focus has no uncle."
+        assertGrandparent focus = case parent focus of
+                             Just x -> x
+                             Nothing -> error "fixRBTree_3's focus has no grandparent."
+{-
 fixRBTree focus@(Loc _ _)
   | isNothing parent = error "fixRBTree has no parent! first pattern match failed"
   | getColorOfFocus (fromJust parent) == Black = focus
@@ -69,21 +100,20 @@ fixRBTree focus@(Loc _ _)
           paintCurTreeBlack = modifyLoc $ modifyRoot rbPaintItBlack
           paintCurTreeRed = modifyLoc $ modifyRoot rbPaintItRed
           getColorOfFocus = rbGetColor . fromJust . getValue . locGetCurTree
-
+-}
 balance :: (Eq a) => Loc (RBNode a) -> Loc (RBNode a)
 balance focus
   | isLR = balance $ fromJust $ Just (rotateTreeAtFocus rotateLeft (fromJust (Just focus >>= up))) >>= downLeft
   | isRL = balance $ fromJust $ Just (rotateTreeAtFocus rotateRight (fromJust (Just focus >>= up))) >>= downRight
-  | isLL = paintCurTreeRed $ fromJust $ Just (paintCurTreeBlack $ rotateTreeAtFocus rotateRight (fromJust grandParent)) >>= downRight
-  | isRR = paintCurTreeRed $ fromJust $ Just (paintCurTreeBlack $ rotateTreeAtFocus rotateLeft (fromJust grandParent)) >>= downLeft
-    where isLR = (grandParent >>= downLeft >>= downRight) == Just focus
-          isRL = (grandParent >>= downRight >>= downLeft) == Just focus
-          isLL = (grandParent >>= downLeft >>= downLeft) == Just focus
-          isRR = (grandParent >>= downRight >>= downRight) == Just focus
+  | isLL = setRed $ fromJust $ Just (setBlack $ rotateTreeAtFocus rotateRight (fromJust $ grandParent focus)) >>= downRight
+  | isRR = setRed $ fromJust $ Just (setBlack $ rotateTreeAtFocus rotateLeft (fromJust $ grandParent focus)) >>= downLeft
+    where isLR = (grandParent focus >>= downLeft >>= downRight) == Just focus
+          isRL = (grandParent focus >>= downRight >>= downLeft) == Just focus
+          isLL = (grandParent focus >>= downLeft >>= downLeft) == Just focus
+          isRR = (grandParent focus >>= downRight >>= downRight) == Just focus
           rotateTreeAtFocus f (Loc tree context) = Loc (f tree) context
-          grandParent = Just focus >>= up >>= up
-          paintCurTreeBlack = modifyLoc $ modifyRoot rbPaintItBlack
-          paintCurTreeRed = modifyLoc $ modifyRoot rbPaintItRed
+          setBlack = (\x -> setColorOfFocus x Black)
+          setRed = (\x -> setColorOfFocus x Red)
 
 --nontotal function.
 --variable names are in neal's lecture notes
@@ -121,6 +151,38 @@ top (Loc lTree (Left v rTree c)) = top (Loc (Node v lTree rTree) c)
 top (Loc rTree (Right v lTree c)) = top (Loc (Node v lTree rTree) c)
 
 --helper functions
+setColorOfFocus :: Loc (RBNode a) -> Color -> Loc (RBNode a)
+setColorOfFocus (Loc tree context) c = Loc (modifyRoot (\x -> rbPaint x c) tree) context
+
+parentColor :: Eq a => Loc (RBNode a) -> Maybe Color
+parentColor focus = case parent focus of
+                    Just x -> Just $ colorOfFocus x
+                    Nothing -> Nothing
+uncleColor :: Eq a => Loc (RBNode a) -> Maybe Color
+uncleColor focus = case uncle focus of
+                   Just x -> Just $ colorOfFocus x
+                   Nothing -> Just Black
+nodeValueOfCurTree :: Loc a -> a
+nodeValueOfCurTree x = case getNodeValue $ locGetCurTree x of
+                        Just value -> value
+                        Nothing -> error "Value is Empty"
+
+parent :: Loc a -> Maybe (Loc a)
+parent focus = Just focus >>= up
+
+uncle :: Eq a => Loc a -> Maybe (Loc a)
+uncle focus = (parent focus) >>= sibling
+
+sibling :: Eq a => Loc a -> Maybe (Loc a)
+sibling focus
+  | ((Just focus >>= up >>= downLeft) == Just focus) = Just focus >>= up >>= downRight
+  | otherwise = Just focus >>= up >>= downLeft
+
+grandParent :: Loc a -> Maybe (Loc a)
+grandParent focus = Just focus >>= up >>= up
+
+colorOfFocus :: Loc (RBNode a) -> Color
+colorOfFocus = rbGetColor . nodeValueOfCurTree
 
 modifyRoot :: (a -> a) -> Tree a -> Tree a
 modifyRoot f (Node v l r) = Node (f v) l r
@@ -128,9 +190,9 @@ modifyRoot f (Node v l r) = Node (f v) l r
 zippify :: Tree a -> Loc a
 zippify t = Loc t Top
 
-getValue :: Tree a -> Maybe a
-getValue (Node v _ _) = Just v
-getValue Empty = Nothing
+getNodeValue :: Tree a -> Maybe a
+getNodeValue (Node v _ _) = Just v
+getNodeValue Empty = Nothing
 
 unzippify :: Loc a -> Tree a
 unzippify loc = locGetCurTree $ top loc
@@ -151,11 +213,8 @@ rbGetColor (RB _ c) = c
 rbGetValue :: RBNode a -> a
 rbGetValue (RB value _) = value
 
-rbPaintItBlack :: RBNode a -> RBNode a
-rbPaintItBlack (RB v _) = RB v Black
-
-rbPaintItRed :: RBNode a -> RBNode a
-rbPaintItRed (RB v _) = RB v Red
+rbPaint :: RBNode a -> Color -> RBNode a
+rbPaint (RB v _) col = RB v col
 
 mapGetValue :: Map a b -> b
 mapGetValue (Map _ v) = v
