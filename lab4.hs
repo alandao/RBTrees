@@ -20,18 +20,21 @@ data Color = Red | Black deriving (Eq, Show)
 data RBNode a = RB a Color
                 deriving (Show, Eq)
 type RBTreeMap k v = Tree (RBNode (Map k v))
-
 -- an Empty node is a black leaf
-test_1 = fmap (fmap (Text.splitOn $ Text.pack ",") . Text.lines) (Text.readFile "players_homeruns.csv")
 
 main :: IO()
 main = do
-  file <- fmap (fmap splitNameAndScore . Text.lines) (Text.readFile "players_homeruns.csv")
-  --let tree = foldr (\x -> insert $ Map (head x) (x !! 1)) Empty file
-  --putStrLn $ showTree tree
+  listOfTuple <- fmap (fmap (listToTuple . splitNameAndScore) . Text.lines) (Text.readFile "players_homeruns.csv")
+  let tree = foldr (\x -> insert $ Map (fst x) (snd x)) Empty listOfTuple
+  menu tree
     where splitNameAndScore = Text.splitOn $ Text.pack ","
+          listToTuple [x,y] = (x,y)
 
-treeLoop :: RBTreeMap a b -> IO()
+menu :: RBTreeMap a b -> IO()
+menu tree = do
+  putStrLn "Enter a player name or \"ALL\""
+  input <- getLine
+  menu tree
 
 showTree :: Show a => Tree a -> String
 showTree Empty = ""
@@ -41,6 +44,13 @@ showTree (Node v l r)= showTree l ++ show v ++ showTree r
 size :: Tree a -> Int
 size Empty = 0
 size (Node _ l r) = size l + 1 + size r
+
+find :: (Ord a) => a -> Tree a -> Bool
+find x Empty = False
+find x (Node v l r)
+  | x == v = True
+  | x < v = find x l
+  | x > v = find x r
 
 --Red Black Tree operations
 insert :: (Ord a, Eq b) => Map a b -> RBTreeMap a b -> RBTreeMap a b
@@ -68,7 +78,8 @@ fixRBTree_2 focus
 --case 3: P and U are both red.
 fixRBTree_3 :: (Eq a) => Loc (RBNode a) -> Loc (RBNode a)
 fixRBTree_3 focus
-  | parentColor focus == Just Red && uncleColor focus == Just Red = fixRBTree $
+  | isNothing (uncle focus) = balance focus
+  | (parentColor focus == Just Red && uncleColor focus == Just Red) = fixRBTree $
                                                           setRed $
                                                           assertGrandparent $
                                                           setBlack $
@@ -88,30 +99,7 @@ fixRBTree_3 focus
         assertGrandparent focus = case parent focus of
                              Just x -> x
                              Nothing -> error "fixRBTree_3's focus has no grandparent."
-{-
-fixRBTree focus@(Loc _ _)
-  | isNothing parent = error "fixRBTree has no parent! first pattern match failed"
-  | getColorOfFocus (fromJust parent) == Black = focus
-  | getColorOfFocus (fromJust parent) == Red && --beware, nasty stuff inbound
-    getColorOfFocus (fromJust (getSibling parent)) == Red =  fixRBTree $
-                                                             paintCurTreeRed $
-                                                             fromJust ((Just $
-                                                             paintCurTreeBlack $
-                                                             fromJust $
-                                                             getSibling $
-                                                             Just $
-                                                             paintCurTreeBlack $
-                                                             fromJust parent)>>=
-                                                             up)
-  | otherwise = balance focus
-    where parent = Just focus >>= up
-          getSibling x = if locIsLeftNodeOfParent (fromJust x) --sibling of parent is uncle(or aunt)
-                  then x >>= up >>= downRight
-                  else x >>= up >>= downLeft
-          paintCurTreeBlack = modifyLoc $ modifyRoot rbPaintItBlack
-          paintCurTreeRed = modifyLoc $ modifyRoot rbPaintItRed
-          getColorOfFocus = rbGetColor . fromJust . getValue . locGetCurTree
--}
+
 balance :: (Eq a) => Loc (RBNode a) -> Loc (RBNode a)
 balance focus
   | isLR = balance $ fromJust $ Just (rotateTreeAtFocus rotateLeft (fromJust (Just focus >>= up))) >>= downLeft
@@ -134,13 +122,6 @@ rotateLeft (Node p one (Node n two three)) = Node n (Node p one two) three
 rotateRight :: Tree a -> Tree a
 rotateRight (Node p (Node n three two) one) = Node n three (Node p two one)
 
---data Tree a = Node a (Tree a) (Tree a)
-find :: (Ord a) => a -> Tree a -> Bool
-find x Empty = False
-find x (Node v l r)
-  | x == v = True
-  | x < v = find x l
-  | x > v = find x r
 
 --zippers
 downLeft :: Loc a -> Maybe (Loc a)
@@ -171,8 +152,11 @@ parentColor focus = case parent focus of
                     Nothing -> Nothing
 uncleColor :: Eq a => Loc (RBNode a) -> Maybe Color
 uncleColor focus = case uncle focus of
-                   Just x -> Just $ colorOfFocus x
-                   Nothing -> Just Black
+                   Just x -> case getNodeValue (locGetCurTree x) of
+                              Nothing -> Nothing
+                              Just _ -> Just $ colorOfFocus x
+                   Nothing -> Nothing
+
 nodeValueOfCurTree :: Loc a -> a
 nodeValueOfCurTree x = case getNodeValue $ locGetCurTree x of
                         Just value -> value
@@ -182,7 +166,7 @@ parent :: Loc a -> Maybe (Loc a)
 parent focus = Just focus >>= up
 
 uncle :: Eq a => Loc a -> Maybe (Loc a)
-uncle focus = (parent focus) >>= sibling
+uncle focus = parent focus >>= sibling
 
 sibling :: Eq a => Loc a -> Maybe (Loc a)
 sibling focus
@@ -225,7 +209,7 @@ rbGetValue :: RBNode a -> a
 rbGetValue (RB value _) = value
 
 rbPaint :: RBNode a -> Color -> RBNode a
-rbPaint (RB v _) col = RB v col
+rbPaint (RB v _) = RB v
 
 mapGetValue :: Map a b -> b
 mapGetValue (Map _ v) = v
