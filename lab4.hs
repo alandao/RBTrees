@@ -21,9 +21,7 @@ type RBTreeMap k v = Tree (RBNode (Map k v))
 -- an Empty node is a black leaf
 
 tree1 :: RBTreeMap String Integer
-tree1 = Node (RB (Map "george" 17) Black) (Node (RB (Map "alan" 10) Red) Empty (Node(RB (Map "bob" 10) Red) Empty Empty))  (Node (RB (Map "zach" 10) Red) Empty Empty)
-
-tree1focusAtN = (Just $ zippify tree1) >>= downLeft >>= downRight
+tree1 = Node (RB (Map "george" 17) Black) (Node (RB (Map "alan" 10) Red) Empty Empty)  (Node (RB (Map "zach" 10) Black) Empty Empty)
 
 main :: IO()
 main = putStrLn "Undefined"
@@ -35,7 +33,7 @@ size (Node _ l r) = size l + 1 + size r
 
 --Red Black Tree operations
 insert :: (Ord a, Eq b) => Map a b -> RBTreeMap a b -> RBTreeMap a b
-insert item tree = unzippify $ insertZipped item (Just (zippify tree))
+insert item tree = unzippify $ fixRBTree $ insertZipped item (Just (zippify tree))
 
 insertZipped :: (Ord a, Eq b) => Map a b -> Maybe (Loc (RBNode (Map a b)))-> Loc (RBNode (Map a b))
 insertZipped _ Nothing = error "this wasn't meant to happen, fix me!"
@@ -74,15 +72,18 @@ fixRBTree focus@(Loc _ _)
 
 balance :: (Eq a) => Loc (RBNode a) -> Loc (RBNode a)
 balance focus
-  | isLR = error "is lr!!"
-  | isRL = error "is rl!!"
-  | isLL = undefined
-  | isRR = undefined
+  | isLR = balance $ fromJust $ Just (rotateTreeAtFocus rotateLeft (fromJust (Just focus >>= up))) >>= downLeft
+  | isRL = balance $ fromJust $ Just (rotateTreeAtFocus rotateRight (fromJust (Just focus >>= up))) >>= downRight
+  | isLL = paintCurTreeRed $ fromJust $ Just (paintCurTreeBlack $ rotateTreeAtFocus rotateRight (fromJust grandParent)) >>= downRight
+  | isRR = paintCurTreeRed $ fromJust $ Just (paintCurTreeBlack $ rotateTreeAtFocus rotateLeft (fromJust grandParent)) >>= downLeft
     where isLR = (grandParent >>= downLeft >>= downRight) == Just focus
           isRL = (grandParent >>= downRight >>= downLeft) == Just focus
           isLL = (grandParent >>= downLeft >>= downLeft) == Just focus
           isRR = (grandParent >>= downRight >>= downRight) == Just focus
+          rotateTreeAtFocus f (Loc tree context) = Loc (f tree) context
           grandParent = Just focus >>= up >>= up
+          paintCurTreeBlack = modifyLoc $ modifyRoot rbPaintItBlack
+          paintCurTreeRed = modifyLoc $ modifyRoot rbPaintItRed
 
 --nontotal function.
 --variable names are in neal's lecture notes
@@ -92,8 +93,13 @@ rotateLeft (Node p one (Node n two three)) = Node n (Node p one two) three
 rotateRight :: Tree a -> Tree a
 rotateRight (Node p (Node n three two) one) = Node n three (Node p two one)
 
-find :: a -> RBTreeMap a b -> b
-find = undefined
+--data Tree a = Node a (Tree a) (Tree a)
+find :: (Ord a) => a -> Tree a -> Bool
+find x Empty = False
+find x (Node v l r)
+  | x == v = True
+  | x < v = find x l
+  | x > v = find x r
 
 --zippers
 downLeft :: Loc a -> Maybe (Loc a)
