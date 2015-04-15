@@ -1,6 +1,9 @@
 module RBTree where
 
 import Prelude hiding (Left, Right)
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
+
 import Data.Maybe
 
 data Tree a = Empty | Node a (Tree a) (Tree a)
@@ -19,12 +22,20 @@ data RBNode a = RB a Color
 type RBTreeMap k v = Tree (RBNode (Map k v))
 
 -- an Empty node is a black leaf
-
-test_1 = insert (Map 49 "a") $ insert (Map 50 "a") Empty
-test_2 = insert (Map 51 "a") $ insert (Map 50 "a") Empty
+test_1 = fmap (fmap (Text.splitOn $ Text.pack ",") . Text.lines) (Text.readFile "players_homeruns.csv")
 
 main :: IO()
-main = putStrLn "Undefined"
+main = do
+  file <- fmap (fmap splitNameAndScore . Text.lines) (Text.readFile "players_homeruns.csv")
+  --let tree = foldr (\x -> insert $ Map (head x) (x !! 1)) Empty file
+  --putStrLn $ showTree tree
+    where splitNameAndScore = Text.splitOn $ Text.pack ","
+
+treeLoop :: RBTreeMap a b -> IO()
+
+showTree :: Show a => Tree a -> String
+showTree Empty = ""
+showTree (Node v l r)= showTree l ++ show v ++ showTree r
 
 --functions required to write
 size :: Tree a -> Int
@@ -66,8 +77,8 @@ fixRBTree_3 focus
                                                           setBlack $
                                                           assertParent focus
   | otherwise = balance focus
-  where setBlack focus = (\x -> setColorOfFocus x Black) focus
-        setRed focus = (\x -> setColorOfFocus x Red) focus
+  where setBlack x = setColorOfFocus x Black
+        setRed x = setColorOfFocus x Red
         assertParent focus = case parent focus of
                              Just x-> x
                              Nothing -> error "fixRBTree_3's focus has no parent."
@@ -112,8 +123,8 @@ balance focus
           isLL = (grandParent focus >>= downLeft >>= downLeft) == Just focus
           isRR = (grandParent focus >>= downRight >>= downRight) == Just focus
           rotateTreeAtFocus f (Loc tree context) = Loc (f tree) context
-          setBlack = (\x -> setColorOfFocus x Black)
-          setRed = (\x -> setColorOfFocus x Red)
+          setBlack x = setColorOfFocus x Black
+          setRed x = setColorOfFocus x Red
 
 --nontotal function.
 --variable names are in neal's lecture notes
