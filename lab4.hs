@@ -2,6 +2,7 @@ import Prelude hiding (Left, Right)
 import Data.Monoid ((<>))
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
+import System.Exit
 
 
 import Data.Maybe
@@ -36,6 +37,7 @@ menu tree = do
   input <- getLine
   case input of
    "ALL" -> Text.putStrLn $ foldr (<>) (Text.pack "") (fmap ((<> Text.pack "\n"). Text.pack . show) $ keySet tree)
+   "exit" -> exitSuccess
    _ -> case (find (Text.pack input) tree) of
          Just homeruns -> Text.putStrLn ((Text.pack . show) homeruns)
          Nothing -> putStrLn "Player not found."
