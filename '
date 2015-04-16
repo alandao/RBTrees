@@ -32,14 +32,14 @@ main = do
     where splitNameAndScore = Text.splitOn $ Text.pack ","
           listToTuple [x,y] = (x,y)
 
-menu :: (Show b) => RBTreeMap Text.Text b -> IO()
+menu :: (Ord a, Show a, Show b) => RBTreeMap a b -> IO()
 menu tree = do
   putStrLn "Enter a player name or \"ALL\""
   input <- getLine
   case input of
    "ALL" -> Text.putStrLn $ foldr (<>) (Text.pack "") (fmap ((<> Text.pack "\n"). Text.pack . show) $ keySet tree)
-   _ -> case (find (Text.pack input) tree) of
-         Just homeruns -> Text.putStrLn ((Text.pack . show) homeruns)
+   _ -> case (find input tree) of
+         Just homeruns -> putStrLn (show homeruns)
          Nothing -> putStrLn "Player not found."
   menu tree
 
