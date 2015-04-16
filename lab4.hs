@@ -1,5 +1,3 @@
-module RBTree where
-
 import Prelude hiding (Left, Right)
 import Data.Monoid ((<>))
 import qualified Data.Text as Text
