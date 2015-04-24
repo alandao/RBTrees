@@ -1,69 +1,107 @@
+{-# LANGUAGE OverloadedStrings #-}
+-- ^this extension makes type of string literals to be
+-- IsString a => a
+-- instread of
+-- [Char]
+
 import Prelude hiding (Left, Right)
-import Data.Monoid ((<>))
-import qualified Data.Text as Text
+
+import Control.Monad (forever)
+
+import Data.Composition ((.:))
+import Data.Maybe
+import Data.Monoid
+import qualified Data.Text    as Text
 import qualified Data.Text.IO as Text
+
 import System.Exit
 
+data Tree a 
+    = Empty 
+    | Node a (Tree a) (Tree a)
+    deriving (Eq, Show)
 
-import Data.Maybe
+data Context a 
+    = Top
+    | Left  a (Tree a) (Context a)
+    | Right a (Tree a) (Context a)
+    deriving (Show, Eq)
 
-data Tree a = Empty | Node a (Tree a) (Tree a)
-                 deriving (Eq, Show)
-data Context a = Top
-               | Left a (Tree a) (Context a)
-               | Right a (Tree a) (Context a)
-                 deriving (Show, Eq)
-data Loc a = Loc (Tree a) (Context a)
-             deriving (Show, Eq)
-data Map k v = Map k v
-               deriving (Show, Eq)
-data Color = Red | Black deriving (Eq, Show)
-data RBNode a = RB a Color
-                deriving (Show, Eq)
+data Loc a    = Loc (Tree a) (Context a) deriving (Show, Eq)
+data Map k v  = Map k v                  deriving (Show, Eq)
+data Color    = Red | Black              deriving (Eq, Show)
+data RBNode a = RB a Color               deriving (Show, Eq)
+
 type RBTreeMap k v = Tree (RBNode (Map k v))
 -- an Empty node is a black leaf
 
 main :: IO()
 main = do
-  listOfTuple <- fmap (fmap (listToTuple . splitNameAndScore) . Text.lines) (Text.readFile "players_homeruns.csv")
-  let tree = foldr (\x -> insert $ Map (fst x) (snd x)) Empty listOfTuple
-  menu tree
-    where splitNameAndScore = Text.splitOn $ Text.pack ","
-          listToTuple [x,y] = (x,y)
+    contents <- Text.readFile "players_homeruns.csv"
+
+    let ls   = Text.lines contents
+    let recs = map parse ls
+    let tree = fromList recs
+    
+    menu tree
+    
+  where 
+    parse = listToTuple . splitNameAndScore
+
+    splitNameAndScore = Text.splitOn $ Text.pack ","
+    listToTuple [x,y] = (x,y)
 
 menu :: (Show b) => RBTreeMap Text.Text b -> IO()
-menu tree = do
-  putStrLn "Enter a player name or \"ALL\""
-  input <- getLine
-  case input of
-   "ALL" -> Text.putStrLn $ foldr (<>) (Text.pack "") (fmap ((<> Text.pack "\n"). Text.pack . show) $ keySet tree)
-   "exit" -> exitSuccess
-   _ -> case (find (Text.pack input) tree) of
-         Just homeruns -> Text.putStrLn ((Text.pack . show) homeruns)
-         Nothing -> putStrLn "Player not found."
-  menu tree
+menu tree = forever $ do
+    putStrLn "Enter a player name or \"ALL\""
+    input <- getLine
+
+    case input of
+        "ALL" ->
+            Text.putStrLn $ Text.unlines $ keySet tree
+
+        "exit" ->
+            exitSuccess
+        
+        _ -> 
+            let search = Text.pack input `find` tree
+
+            in maybe 
+                (putStrLn "Player not found.")
+                (Text.putStrLn . Text.pack . show)
+                search
 
 showTree :: Show a => Tree a -> Text.Text
-showTree Empty = Text.pack ""
-showTree (Node v l r)= showTree l <> (Text.pack $ show v) <> (Text.pack "\n") <> showTree r
+showTree  Empty       = ""
+showTree (Node v l r) = mempty 
+    <> showTree l 
+    <> Text.pack (show v) 
+    <> "\n" 
+    <> showTree r
+
+fromList :: (Ord a, Eq b) => [(a, b)] -> RBTreeMap a b
+fromList = foldr attach Empty
+  where
+    attach (k, v) = insert (Map k v)
 
 --functions required to write
 insert :: (Ord a, Eq b) => Map a b -> RBTreeMap a b -> RBTreeMap a b
-insert item tree = unzippify $ fixRBTree $ insertZipped item (Just (zippify tree))
+insert item
+    = unzippify 
+    . fixRBTree 
+    . insertZipped item 
+    . Just 
+    . zippify
 
 find :: Ord a => a -> RBTreeMap a b -> Maybe b
 find _ Empty = Nothing
 find x (Node (RB (Map key value) _) l r)
   | x == key = Just value
-  | x < key = find x l
-  | x > key = find x r
+  | x <  key = find x l
+  | x >  key = find x r
 
 containsKey :: (Ord k) => k -> RBTreeMap k v -> Bool
-containsKey _ Empty = False
-containsKey x (Node (RB (Map key _) _) l r)
-  | x == key = True
-  | x < key = containsKey x l
-  | x > key = containsKey x r
+containsKey = isJust .: find
 
 count :: Tree a -> Int
 count Empty = 0
@@ -71,7 +109,7 @@ count (Node _ l r) = count l + 1 + count r
 
 keySet :: RBTreeMap k v -> [k]
 keySet Empty = []
-keySet (Node (RB (Map key _) _) l r) = keySet l ++ [key] ++ keySet r
+keySet (Node (RB (Map key _) _) l r) = [key] <> keySet l <> keySet r
 
 --Red Black Tree operations
 
@@ -98,26 +136,33 @@ fixRBTree_2 focus
 fixRBTree_3 :: (Eq a) => Loc (RBNode a) -> Loc (RBNode a)
 fixRBTree_3 focus
   | isNothing (uncle focus) = balance focus
-  | (parentColor focus == Just Red && uncleColor focus == Just Red) = fixRBTree $
-                                                          setRed $
-                                                          assertGrandparent $
-                                                          setBlack $
-                                                          assertSibling $
-                                                          Just $
-                                                          setBlack $
-                                                          assertParent focus
+  | (parentColor focus == Just Red && uncleColor focus == Just Red) 
+    = fixRBTree 
+    $ setRed 
+    $ assertGrandparent
+    $ setBlack 
+    $ assertSibling 
+    $ Just 
+    $ setBlack 
+    $ assertParent focus
+  
   | otherwise = balance focus
-  where setBlack x = setColorOfFocus x Black
-        setRed x = setColorOfFocus x Red
-        assertParent focus = case parent focus of
+  
+  where 
+    setBlack = (`setColorOfFocus` Black)
+    setRed   = (`setColorOfFocus` Red)
+    
+    assertParent focus = case parent focus of
                              Just x-> x
                              Nothing -> error "fixRBTree_3's focus has no parent."
-        assertSibling focus = case focus >>= sibling of
-                             Just x -> x
-                             Nothing -> error "fixRBTree_3's focus has no uncle."
-        assertGrandparent focus = case parent focus of
-                             Just x -> x
-                             Nothing -> error "fixRBTree_3's focus has no grandparent."
+    
+    assertSibling focus = case focus >>= sibling of
+                         Just x -> x
+                         Nothing -> error "fixRBTree_3's focus has no uncle."
+    
+    assertGrandparent focus = case parent focus of
+                         Just x -> x
+                         Nothing -> error "fixRBTree_3's focus has no grandparent."
 
 balance :: (Eq a) => Loc (RBNode a) -> Loc (RBNode a)
 balance focus
